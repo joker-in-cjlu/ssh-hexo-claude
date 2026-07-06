@@ -12,6 +12,6 @@ tags: [GitHub]
 
 | 仓库 | 说明 |
 |------|------|
-| [ssh-from-claude-test](https://github.com/joker-in-cjlu/ssh-from-claude-test) | 选择排序 + 项目历史记录测试 |
+| [ssh-from-claude-test](https://github.com/joker-in-cjlu/ssh-from-claude-test) | 项目历史记录测试 |
 | [ssh-hexo-claude](https://github.com/joker-in-cjlu/ssh-hexo-claude) | 本博客 Hexo 源文件 |
 | [joker-in-cjlu.github.io](https://github.com/joker-in-cjlu/joker-in-cjlu.github.io) | 博客静态页面部署 |
